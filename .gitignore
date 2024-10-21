@@ -1,0 +1,24 @@
+# Logs and temp files
+logs/
+*.log
+*.tmp
+*.bak
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Python files (if using Python)
+*.pyc
+__pycache__/
+
+# Configuration files that contain sensitive info
+config/*.env
+config/secret_config.json
+
+# Virtual environment (if using one)
+venv/
+.env
+
+# Data files
+data/
