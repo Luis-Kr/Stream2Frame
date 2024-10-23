@@ -1,0 +1,16 @@
+defaults:
+  - _self_
+  - cams: ../utils/cams
+  - ssh: ../utils/ssh
+
+NVR:
+  src_dir: /srv/unifi-protect/video
+  dst_dir: data/raw_videos
+  dst_dir_frames: data/raw_frames
+  dst_dir_videos: data/processed_videos
+  logger_dir: logs/
+  camera_name: G5Bullet_07
+  year: 2024
+  month: 10
+  day: 20
+
