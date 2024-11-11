@@ -1,5 +1,6 @@
 # Logs and temp files
-logs/
+logs/*
+!logs/.gitkeep
 *.log
 *.tmp
 *.bak
@@ -22,6 +23,7 @@ config/utils/ssh.yaml
 venv/
 .env
 
-# Data files
-data/
+# Data files - keep folder but ignore contents
+data/*
+!data/.gitkeep
 outputs/
