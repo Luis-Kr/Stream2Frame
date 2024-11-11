@@ -17,7 +17,7 @@ Stream2Frame is designed to process .ubv video files from UniFi Protect cameras,
 
 ## Configuration
 
-1. Edit `config/utils/cams.yaml` to define your cameras:
+1. Create and edit `config/utils/cams.yaml` to define your cameras:
 
 ```yaml
 
