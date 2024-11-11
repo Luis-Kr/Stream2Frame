@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Previous day's date
-#previous_day=$(date -d "yesterday" '+%Y-%m-%d')
-previous_day="2024-10-22"
+previous_day=$(date -d "yesterday" '+%Y-%m-%d')
+#previous_day="2024-10-20"
 YEAR=$(date -d "$previous_day" '+%Y')
 MONTH=$(date -d "$previous_day" '+%m')
 DAY=$(date -d "$previous_day" '+%d')
