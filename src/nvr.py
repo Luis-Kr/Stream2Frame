@@ -94,17 +94,6 @@ def rename_mp4_files(logger: logging.Logger, src_dir: Path) -> None:
             # Rename the file
             file.rename(new_file)
             logger.info(f"Renamed {file} to {new_file}")
-        
-        if file.is_file() and file.suffix == ".mp4" and '_1' in file.stem:
-            # Check if the filesize is greater than the size of the file with '_0' in the name
-            if file.stat().st_size > (src_dir / f"{file.stem.replace('_1', '')}.mp4").stat().st_size:
-                # Construct the new filename by removing '_1' before the extension
-                new_name = file.stem.replace('_1', '') + file.suffix
-                new_file = file.with_name(new_name)
-                
-                # Rename the file
-                file.rename(new_file)
-                logger.info(f"Renamed {file} to {new_file}")
                 
                 
 def concat_videos(src_dir: Path, logger: logging.Logger) -> None:
@@ -187,7 +176,7 @@ def process_frame_data(mp4_txt_file: str) -> Tuple[List[int], List[str]]:
 
     # Set the 'CTS' column as the index and resample the DataFrame to 5-minute intervals
     df.set_index('CTS', inplace=True)
-    frame_numbers = df['frame'].resample('3min').first().dropna().tolist()
+    frame_numbers = df['frame'].resample('2min').first().dropna().tolist()
     
     # Get the corresponding frame dates
     frame_dates = [df.iloc[date].name.strftime('%Y-%m-%d_%H_%M_%S') for date in frame_numbers]
@@ -201,21 +190,26 @@ def extract_frames_to_video_and_csv(logger: logging.Logger,
                                     frame_numbers: List[int], 
                                     frame_dates: List[str],
                                     camera_name: str,
-                                    output_dir: str) -> None:
+                                    output_dir: str,
+                                    video_writer: cv2.VideoWriter = None,
+                                    frame_width: int = None,
+                                    frame_height: int = None) -> Tuple[int, cv2.VideoWriter, int, int]:
     video_capture = cv2.VideoCapture(mp4_file)
 
     if not video_capture.isOpened():
         logger.info("Error: Could not open video.")
-        return
+        return fn, video_writer, frame_width, frame_height
 
-    # Get the width and height of the frames
-    frame_width = int(video_capture.get(cv2.CAP_PROP_FRAME_WIDTH))
-    frame_height = int(video_capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    # Get the width and height of the frames if not already set
+    if frame_width is None or frame_height is None:
+        frame_width = int(video_capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+        frame_height = int(video_capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    # Define the codec and create VideoWriter object
-    output_video_path = Path(output_dir) / f'{camera_name}_output_video.mp4'
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    video_writer = cv2.VideoWriter(str(output_video_path), fourcc, 30, (frame_width, frame_height))
+    # Define the codec and create VideoWriter object if not already created
+    if video_writer is None:
+        output_video_path = Path(output_dir) / f'{camera_name}_output_video.mp4'
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        video_writer = cv2.VideoWriter(str(output_video_path), fourcc, 30, (frame_width, frame_height))
 
     # CSV file to store frame_number and frame_date
     csv_file_path = Path(output_dir) / f'{camera_name}_frame_data.csv'
@@ -249,13 +243,11 @@ def extract_frames_to_video_and_csv(logger: logging.Logger,
                 logger.error(f"Could not process frame of camera {camera_name} with the date: {frame_date}.")
                 continue
 
-    # Release the video writer and video capture objects
-    video_writer.release()
+    # Release the video capture object
     video_capture.release()
-    logger.info(f"Video saved to {output_video_path}")
     logger.info(f"Frame data saved to {csv_file_path}")
     
-    return fn
+    return fn, video_writer, frame_width, frame_height
 
 
 def transfer_data_local_remote(logger: logging.Logger, 
