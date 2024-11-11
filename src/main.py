@@ -71,21 +71,32 @@ def main(cfg: DictConfig) -> None:
         file_pairs = nvr.find_file_pairs(src_dir)
         
         fn=0
+        video_writer = None
+        frame_width, frame_height = None, None
+        
         for mp4_file, txt_infofile in file_pairs:
             logger.info(f"::: Processing file {mp4_file}... and {txt_infofile} ... :::")
             
             try:
                 frame_numbers, frame_dates = nvr.process_frame_data(txt_infofile)
-                fn = nvr.extract_frames_to_video_and_csv(logger=logger, 
-                                                            mp4_file=mp4_file,
-                                                            fn=fn,
-                                                            frame_numbers=frame_numbers, 
-                                                            frame_dates=frame_dates,
-                                                            camera_name=camera_name,
-                                                            output_dir=dst_dir)
+                fn, video_writer, frame_width, frame_height = nvr.extract_frames_to_video_and_csv(
+                    logger=logger, 
+                    mp4_file=mp4_file,
+                    fn=fn,
+                    frame_numbers=frame_numbers, 
+                    frame_dates=frame_dates,
+                    camera_name=camera_name,
+                    output_dir=dst_dir,
+                    video_writer=video_writer,
+                    frame_width=frame_width,
+                    frame_height=frame_height
+                )
             except Exception as e:
                 logger.error(f"Error processing file {mp4_file}: {e}")
                 continue
+            
+        if video_writer:
+            video_writer.release()
             
         # Transfer the data to the server
         try:
