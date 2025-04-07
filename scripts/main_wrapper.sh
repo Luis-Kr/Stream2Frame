@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Previous day's date
-previous_day=$(date -d "yesterday" '+%Y-%m-%d')
-#previous_day="2024-10-20"
+#previous_day=$(date -d "yesterday" '+%Y-%m-%d')
+previous_day="2025-04-06"
 YEAR=$(date -d "$previous_day" '+%Y')
 MONTH=$(date -d "$previous_day" '+%m')
 DAY=$(date -d "$previous_day" '+%d')
@@ -13,7 +13,7 @@ log_file_main="/volume1/Stream2Frame/logs/NVR_wrapper/NVR_wrapper_main_${previou
 echo "VM wrapper started at $(date)" >> "$log_file"
 
 # Activate the Conda environment
-source /root/miniconda3/etc/profile.d/conda.sh
+source /root/miniforge/etc/profile.d/conda.sh
 source ~/.bashrc
 conda activate dt_ecosense
 echo "Conda environment activated: $(conda info --envs | grep '*' | awk '{print $1}')" >> "$log_file"
