@@ -87,6 +87,7 @@ def main(cfg: DictConfig) -> None:
         fn=0
         video_writer = None
         frame_width, frame_height = None, None
+        all_frame_data = []  # Create a list to collect all frame data
         
         for mp4_file, txt_infofile in file_pairs:
             # Check if both files exist
@@ -98,7 +99,7 @@ def main(cfg: DictConfig) -> None:
             
             try:
                 frame_numbers, frame_dates = nvr.process_frame_data(txt_infofile)
-                fn, video_writer, frame_width, frame_height = nvr.extract_frames_to_video_and_csv(
+                fn, video_writer, frame_width, frame_height, frame_data = nvr.extract_frames_to_video_and_csv(
                     logger=logger, 
                     mp4_file=mp4_file,
                     fn=fn,
@@ -108,8 +109,10 @@ def main(cfg: DictConfig) -> None:
                     output_dir=dst_dir,
                     video_writer=video_writer,
                     frame_width=frame_width,
-                    frame_height=frame_height
+                    frame_height=frame_height,
+                    write_csv=False  # Don't write CSV during loop
                 )
+                all_frame_data.extend(frame_data)  # Add this batch of frame data to our collection
             except Exception as e:
                 logger.error(f"Error processing file {mp4_file}: {e}")
                 continue
@@ -117,6 +120,16 @@ def main(cfg: DictConfig) -> None:
         if video_writer:
             video_writer.release()
             
+        # Write all collected frame data to a single CSV file after processing all files
+        if all_frame_data:
+            csv_file_path = dst_dir / f'{camera_name}_frame_data.csv'
+            try:
+                df = pd.DataFrame(all_frame_data)
+                df.to_csv(csv_file_path, index=False)
+                logger.info(f"Saved all frame data to {csv_file_path}")
+            except Exception as e:
+                logger.error(f"Error saving CSV file: {e}")
+        
         # Transfer the data to the server
         try:
             # Use exact camera_name from config for output files
