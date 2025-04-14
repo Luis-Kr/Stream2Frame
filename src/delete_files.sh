@@ -7,8 +7,8 @@ LOG_DIR="${BASE_DIR}/logs/delete_files"
 mkdir -p "$LOG_DIR"
 
 # Previous day's date
-previous_date=$(date -d "2 days ago" '+%Y-%m-%d') #2 days ago
-#previous_date="2024-10-31"
+#previous_date=$(date -d "2 days ago" '+%Y-%m-%d') #2 days ago
+previous_date="2025-03-31"
 YEAR=$(date -d "$previous_date" '+%Y')
 MONTH=$(date -d "$previous_date" '+%m')
 DAY=$(date -d "$previous_date" '+%d')
