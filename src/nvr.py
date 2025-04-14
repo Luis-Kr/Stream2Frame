@@ -85,8 +85,6 @@ def convert_single_camera(cfg: DictConfig,
         # Increment the prefix counter
         prefix_counter += 1
         
-        break
-        
 
 def rename_mp4_files(logger: logging.Logger, src_dir: Path) -> None:
     # Loop through the files in the directory
@@ -109,8 +107,6 @@ def concat_videos(src_dir: Path, logger: logging.Logger) -> None:
         if file.is_file() and file.suffix == '.mp4':
             base_name = file.stem.rsplit('_', 1)[0]
             video_groups[base_name].append(file)
-            
-    print(video_groups)
 
     # Stitch videos together
     for base_name, files in video_groups.items():
@@ -200,7 +196,8 @@ def extract_frames_to_video_and_csv(logger: logging.Logger,
                                   video_writer: cv2.VideoWriter = None,
                                   frame_width: int = None,
                                   frame_height: int = None,
-                                  batch_size: int = 500) -> Tuple[int, cv2.VideoWriter, int, int]:
+                                  batch_size: int = 500,
+                                  write_csv: bool = True) -> Tuple[int, cv2.VideoWriter, int, int, List]:
     """High-performance version optimized for speed"""
     
     # Enable OpenCV optimizations
@@ -212,7 +209,7 @@ def extract_frames_to_video_and_csv(logger: logging.Logger,
     video_capture = cv2.VideoCapture(mp4_file)
     if not video_capture.isOpened():
         logger.error(f"Could not open video: {mp4_file}")
-        return fn, video_writer, frame_width, frame_height
+        return fn, video_writer, frame_width, frame_height, []
 
     # Initialize video writer if needed
     if frame_width is None or frame_height is None:
@@ -229,14 +226,13 @@ def extract_frames_to_video_and_csv(logger: logging.Logger,
             fourcc = cv2.VideoWriter_fourcc(*'MJPG')
             video_writer = cv2.VideoWriter(str(output_video_path.with_suffix('.avi')), fourcc, 30, (frame_width, frame_height))
 
-    # Prepare CSV file
+    # Prepare CSV file if needed
     csv_file_path = Path(output_dir) / f'{camera_name}_frame_data.csv'
     csv_exists = csv_file_path.exists()
     
     # Direct array for storing CSV data
-    csv_data = []
-    if not csv_exists:
-        csv_data.append(['frame_number', 'frame_date'])
+    frame_data_list = []
+    csv_headers = ['frame_number', 'frame_date']
     
     # Sort frame numbers once for sequential access (major performance boost)
     frame_data = sorted(zip(frame_numbers, frame_dates), key=lambda x: x[0])
@@ -244,7 +240,7 @@ def extract_frames_to_video_and_csv(logger: logging.Logger,
     
     if total_frames == 0:
         logger.warning("No frames to extract")
-        return fn, video_writer, frame_width, frame_height
+        return fn, video_writer, frame_width, frame_height, []
     
     start_time = datetime.now()
     frames_processed = 0
@@ -267,7 +263,7 @@ def extract_frames_to_video_and_csv(logger: logging.Logger,
             
             # Write frame directly to reduce memory usage
             video_writer.write(frame)
-            csv_data.append([fn, frame_date])
+            frame_data_list.append({'frame_number': fn, 'frame_date': frame_date})
             fn += 1
             frames_processed += 1
             
@@ -281,16 +277,26 @@ def extract_frames_to_video_and_csv(logger: logging.Logger,
         logger.error(f"Error processing frames: {e}")
     
     finally:
-        # Write all CSV data at once (much faster)
-        with open(csv_file_path, mode='w', newline='') as csv_file:
-            csv.writer(csv_file).writerows(csv_data)
+        # Write all CSV data at once if requested
+        if write_csv and frame_data_list:
+            try:
+                df = pd.DataFrame(frame_data_list)
+                # If file exists, append without headers
+                if csv_exists:
+                    df.to_csv(csv_file_path, mode='a', header=False, index=False)
+                else:
+                    df.to_csv(csv_file_path, index=False)
+                logger.info(f"Saved frame data to {csv_file_path}")
+            except Exception as e:
+                logger.error(f"Error saving CSV file: {e}")
         
         # Calculate and log performance 
         elapsed = (datetime.now() - start_time).total_seconds()
         if elapsed > 0 and frames_processed > 0:
             logger.info(f"Performance: {frames_processed} frames in {elapsed:.2f}s ({frames_processed/elapsed:.2f} fps)")
     
-    return fn, video_writer, frame_width, frame_height
+    # Return the accumulated frame data along with other return values
+    return fn, video_writer, frame_width, frame_height, frame_data_list
 
 
 def transfer_data_local_remote(logger: logging.Logger, 
