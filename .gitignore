@@ -27,3 +27,4 @@ venv/
 data/*
 !data/.gitkeep
 outputs/
+status/processing_history.csv
