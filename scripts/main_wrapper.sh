@@ -42,9 +42,16 @@ fi
 check_lock() {
     if [ -f "${LOCK_FILE}" ]; then
         pid=$(cat "${LOCK_FILE}")
+        # Check if PID exists
         if ps -p "${pid}" > /dev/null; then
-            log "WARN" "Another processing job is already running (PID: ${pid})"
-            return 1
+            # Check if it's actually the Stream2Frame process
+            if ps -p "${pid}" -o cmd= | grep -q "main.py"; then
+                log "WARN" "Another Stream2Frame processing job is already running (PID: ${pid})"
+                return 1
+            else
+                log "WARN" "Lock file exists but process is not Stream2Frame. Removing stale lock."
+                rm -f "${LOCK_FILE}"
+            fi
         else
             log "WARN" "Stale lock file found. Previous process might have crashed."
             rm -f "${LOCK_FILE}"
@@ -53,9 +60,10 @@ check_lock() {
     return 0
 }
 
-# Create lock file
+# Create enhanced lock file with more information
 create_lock() {
-    echo $$ > "${LOCK_FILE}"
+    # Include PID, timestamp and command name
+    echo "$$ $(date '+%Y-%m-%d %H:%M:%S') main_wrapper.sh" > "${LOCK_FILE}"
     log "INFO" "Lock file created (PID: $$)"
 }
 
@@ -152,12 +160,75 @@ queue_today() {
     update_status "QUEUED" "Date ${year}-${month}-${day} queued for processing" "${year}" "${month}" "${day}"
 }
 
+# Check if the specific date is already being processed
+check_date_lock() {
+    local y="$1"
+    local m="$2"
+    local d="$3"
+    
+    # Check if current status shows this date is already being processed
+    if [ -f "${CURRENT_STATUS}" ]; then
+        current_date=$(grep "DATE:" "${CURRENT_STATUS}" | cut -d':' -f2- | xargs)
+        current_status=$(grep "STATUS:" "${CURRENT_STATUS}" | cut -d':' -f2- | xargs)
+        current_pid=$(grep "CURRENT_PID:" "${CURRENT_STATUS}" | cut -d':' -f2- | xargs)
+        
+        if [ "${current_date}" = "${y}-${m}-${d}" ] && [ "${current_status}" = "PROCESSING" ]; then
+            # Check if the process is still running
+            if ps -p "${current_pid}" > /dev/null; then
+                log "WARN" "Date ${y}-${m}-${d} is already being processed by PID ${current_pid}"
+                return 1
+            else
+                log "WARN" "Found stale status for ${y}-${m}-${d}. Status will be updated."
+            fi
+        fi
+    fi
+    
+    # Create a date-specific lock file
+    DATE_LOCK_FILE="${STATUS_DIR}/lock_${y}_${m}_${d}"
+    
+    if [ -f "${DATE_LOCK_FILE}" ]; then
+        date_pid=$(cat "${DATE_LOCK_FILE}" | cut -d' ' -f1)
+        if ps -p "${date_pid}" > /dev/null; then
+            log "WARN" "Date ${y}-${m}-${d} is already being processed by PID ${date_pid}"
+            return 1
+        else
+            log "WARN" "Stale date lock file found for ${y}-${m}-${d}. Removing."
+            rm -f "${DATE_LOCK_FILE}"
+        fi
+    fi
+    
+    # Create a date-specific lock file
+    echo "$$ $(date '+%Y-%m-%d %H:%M:%S')" > "${DATE_LOCK_FILE}"
+    log "INFO" "Date lock created for ${y}-${m}-${d}"
+    
+    return 0
+}
+
+# Release date-specific lock
+release_date_lock() {
+    local y="$1"
+    local m="$2"
+    local d="$3"
+    DATE_LOCK_FILE="${STATUS_DIR}/lock_${y}_${m}_${d}"
+    
+    if [ -f "${DATE_LOCK_FILE}" ]; then
+        rm -f "${DATE_LOCK_FILE}"
+        log "INFO" "Date lock for ${y}-${m}-${d} released"
+    fi
+}
+
 # Process a specific date
 process_date() {
     local y="$1"
     local m="$2"
     local d="$3"
     local queue_file="$4"
+    
+    # Check if this date is already being processed
+    if ! check_date_lock "${y}" "${m}" "${d}"; then
+        log "INFO" "Skipping date ${y}-${m}-${d} as it is already being processed"
+        return 2
+    fi
     
     log "INFO" "============================================="
     log "INFO" "STARTING PROCESSING FOR DATE: ${y}-${m}-${d}"
@@ -222,8 +293,12 @@ process_date() {
     log "INFO" "COMPLETED PROCESSING FOR DATE: ${y}-${m}-${d}"
     log "INFO" "============================================="
     
+    # Release the date-specific lock when done
+    release_date_lock "${y}" "${m}" "${d}"
+    
     return ${exit_code}
 }
+
 
 # Show current status
 show_status() {
@@ -269,7 +344,15 @@ show_status() {
 # Cleanup function for unexpected termination
 cleanup() {
     log "WARN" "Script interrupted. Cleaning up..."
+    
+    # Release both locks
     release_lock
+    
+    # Release date-specific lock if variables are set
+    if [ -n "${YEAR}" ] && [ -n "${MONTH}" ] && [ -n "${DAY}" ]; then
+        release_date_lock "${YEAR}" "${MONTH}" "${DAY}" 
+    fi
+    
     update_status "INTERRUPTED" "Processing was interrupted at $(date '+%Y-%m-%d %H:%M:%S')"
     exit 1
 }
@@ -323,7 +406,7 @@ main() {
             next_exit_code=$?
             
             if [ ${next_exit_code} -eq 0 ]; then
-                update_status "COMPLETED" "Processing for ${next_year}-${next_month}-${next_day} completed successfully" "${next_year}" "${next_month}" "${next_day}"
+                update_status "COMPLETED" "Processing for ${next_year}-${next-month}-${next-day} completed successfully" "${next_year}" "${next_month}" "${next_day}"
             else
                 update_status "FAILED" "Processing for ${next_year}-${next-month}-${next-day} failed with code ${next_exit_code}" "${next_year}" "${next_month}" "${next_day}"
             fi
