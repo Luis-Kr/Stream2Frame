@@ -13,6 +13,7 @@ import csv
 import numpy as np
 from multiprocessing import Pool, cpu_count
 from itertools import islice
+import re
 
 # Hydra and OmegaConf imports
 import hydra
@@ -101,14 +102,75 @@ def rename_mp4_files(logger: logging.Logger, src_dir: Path) -> None:
                 
                 
 def concat_videos(src_dir: Path, logger: logging.Logger) -> None:
-    # Group files by their base name
+    """
+    Concatenate video files in the source directory.
+    Handles two cases:
+    1. Regular concatenation of videos with same base name but different sequence numbers
+    2. Special case for split files with patterns like _1.mp4, _2.mp4, etc.
+    """
+    # Handle split video files first (files with _N.mp4 pattern)
+    split_groups = defaultdict(list)
+    for file in src_dir.iterdir():
+        if file.is_file() and file.suffix == '.mp4':
+            # Match pattern like 'G5Bullet_27_F4E2C678D10D_2025-04-12_8_1.mp4'
+            match = re.search(r'^(.+_\d+)_(\d+)\.mp4$', file.name)
+            if match:
+                base_name = match.group(1)  # e.g., 'G5Bullet_27_F4E2C678D10D_2025-04-12_8'
+                split_groups[base_name].append(file)
+    
+    # Process the split files
+    for base_name, files in split_groups.items():
+        if len(files) > 1:
+            # Sort files by their suffix number
+            files.sort(key=lambda x: int(re.search(r'^.+_(\d+)\.mp4$', x.name).group(1)))
+            
+            # Create a temporary text file listing the files to concatenate
+            concat_file_path = src_dir / f"{base_name}_concat_list.txt"
+            with open(concat_file_path, 'w') as concat_file:
+                for file in files:
+                    concat_file.write(f"file '{file.name}'\n")
+            
+            # Construct the output file name - match the base name format that corresponds to the txt file
+            output_file = src_dir / f"{base_name}.mp4"
+            
+            # Run ffmpeg to concatenate the files
+            ffmpeg_command = [
+                'ffmpeg',
+                '-f', 'concat',
+                '-safe', '0',
+                '-i', str(concat_file_path),
+                '-c', 'copy',
+                str(output_file)
+            ]
+            
+            try:
+                logger.info(f"Concatenating split files for {base_name}: {[f.name for f in files]}")
+                subprocess.run(ffmpeg_command, check=True)
+                logger.info(f"Successfully concatenated split files into {output_file}")
+                
+                # Optionally remove the original split files
+                for file in files:
+                    file.unlink()
+                    logger.info(f"Removed original split file: {file}")
+                
+            except subprocess.CalledProcessError as e:
+                logger.error(f"An error occurred while concatenating split videos: {e}")
+            
+            # Remove the temporary text file
+            concat_file_path.unlink()
+    
+    # Now handle the regular concatenation case (files with same base but different sequence numbers)
     video_groups = defaultdict(list)
     for file in src_dir.iterdir():
         if file.is_file() and file.suffix == '.mp4':
+            # Skip files that were already processed as split files
+            if any(file.name.startswith(f"{base}_") for base in split_groups.keys()):
+                continue
+                
             base_name = file.stem.rsplit('_', 1)[0]
             video_groups[base_name].append(file)
 
-    # Stitch videos together
+    # Process regular video groups
     for base_name, files in video_groups.items():
         if len(files) > 1:
             # Sort files by their suffix number
@@ -118,7 +180,7 @@ def concat_videos(src_dir: Path, logger: logging.Logger) -> None:
             concat_file_path = src_dir / f"{base_name}_concat_list.txt"
             with open(concat_file_path, 'w') as concat_file:
                 for file in files:
-                    concat_file.write(f"file '{file}'\n")
+                    concat_file.write(f"file '{file.name}'\n")
 
             # Construct the output file name
             output_file = src_dir / f"{base_name}.mp4"
@@ -134,10 +196,11 @@ def concat_videos(src_dir: Path, logger: logging.Logger) -> None:
             ]
 
             try:
+                logger.info(f"Concatenating sequence files: {[f.name for f in files]}")
                 subprocess.run(ffmpeg_command, check=True)
-                logger.info(f"Stitched {files} into {output_file}")
+                logger.info(f"Successfully concatenated sequence files into {output_file}")
             except subprocess.CalledProcessError as e:
-                logger.error(f"An error occurred while stitching videos: {e}")
+                logger.error(f"An error occurred while concatenating sequence videos: {e}")
 
             # Remove the temporary text file
             concat_file_path.unlink()
@@ -184,6 +247,104 @@ def process_frame_data(mp4_txt_file: str) -> Tuple[List[int], List[str]]:
     frame_dates = [df.iloc[date].name.strftime('%Y-%m-%d_%H_%M_%S') for date in frame_numbers]
     
     return frame_numbers, frame_dates
+
+
+# def extract_frames_ffmpeg(logger: logging.Logger,
+#                           mp4_file: str,
+#                           fn: int,
+#                           frame_numbers: List[int],
+#                           frame_dates: List[str],
+#                           camera_name: str,
+#                           output_dir: str,
+#                           write_csv: bool = True) -> Tuple[int, List]:
+#     """Ultra-fast frame extraction using direct FFmpeg commands"""
+    
+#     import shutil  # Add missing import
+    
+#     output_dir_path = Path(output_dir)
+#     output_video_path = output_dir_path / f'{camera_name}_output_video.mp4'
+#     csv_file_path = output_dir_path / f'{camera_name}_frame_data.csv'
+#     csv_exists = csv_file_path.exists()
+    
+#     # Create a temp directory for frames
+#     temp_dir = output_dir_path / "temp_frames"
+#     temp_dir.mkdir(exist_ok=True)
+    
+#     # Sort frame numbers for sequential access
+#     frame_data = sorted(zip(frame_numbers, frame_dates), key=lambda x: x[0])
+#     total_frames = len(frame_data)
+    
+#     if total_frames == 0:
+#         logger.warning("No frames to extract")
+#         return fn, []
+    
+#     frame_data_list = []
+#     start_time = datetime.now()
+#     frames_processed = 0  # Initialize this variable before it's used
+    
+#     try:
+#         # Extract frames using FFmpeg
+#         frame_list_file = output_dir_path / "frame_list.txt"
+#         with open(frame_list_file, 'w') as f:
+#             for i, (frame_number, frame_date) in enumerate(frame_data):
+#                 output_frame = temp_dir / f"frame_{i:06d}.png"
+#                 f.write(f"select=eq(n\\,{frame_number}),outputfile='{output_frame}'\n")
+#                 frame_data_list.append({'frame_number': fn + i, 'frame_date': frame_date})
+        
+#         # Execute FFmpeg to extract all frames at once (much faster)
+#         ffmpeg_extract_cmd = [
+#             'ffmpeg', '-i', mp4_file, '-f', 'lavfi',
+#             '-filter_complex', f"sendcmd=filename='{frame_list_file}'",
+#             '-y', str(temp_dir / "dummy.mp4")  # Convert Path to string
+#         ]
+        
+#         extract_result = subprocess.run(ffmpeg_extract_cmd, check=True, capture_output=True)
+#         logger.debug(extract_result.stderr.decode())
+        
+#         # Create a new video from extracted frames
+#         ffmpeg_concat_cmd = [
+#             'ffmpeg', '-framerate', '30',
+#             '-pattern_type', 'glob', '-i', f"{temp_dir}/*.png",
+#             '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+#             '-y', str(output_video_path)  # Convert Path to string
+#         ]
+        
+#         concat_result = subprocess.run(ffmpeg_concat_cmd, check=True, capture_output=True)
+#         logger.debug(concat_result.stderr.decode())
+        
+#         frames_processed = len(frame_data_list)
+#         fn += frames_processed
+        
+#     except Exception as e:
+#         logger.error(f"Error processing frames with FFmpeg: {e}")
+#         return fn, frame_data_list
+    
+#     finally:
+#         # Write CSV efficiently
+#         if write_csv and frame_data_list:
+#             try:
+#                 with open(csv_file_path, 'a' if csv_exists else 'w', newline='') as f:
+#                     writer = csv.DictWriter(f, fieldnames=['frame_number', 'frame_date'])
+#                     if not csv_exists:
+#                         writer.writeheader()
+#                     writer.writerows(frame_data_list)
+#                 logger.info(f"Saved frame data to {csv_file_path}")
+#             except Exception as e:
+#                 logger.error(f"Error saving CSV file: {e}")
+        
+#         # Clean up temp files
+#         try:
+#             shutil.rmtree(temp_dir)
+#             frame_list_file.unlink()
+#         except Exception as e:
+#             logger.warning(f"Error cleaning up temporary files: {e}")
+        
+#         # Log performance
+#         elapsed = (datetime.now() - start_time).total_seconds()
+#         if elapsed > 0 and frames_processed > 0:
+#             logger.info(f"Performance: {frames_processed} frames in {elapsed:.2f}s ({frames_processed/elapsed:.2f} fps)")
+    
+#     return fn, frame_data_list
 
 
 def extract_frames_to_video_and_csv(logger: logging.Logger, 
@@ -361,3 +522,136 @@ def transfer_data_local_remote(logger: logging.Logger,
 #             continue
 
 #     video_capture.release()
+
+
+def extract_frames_fallback(logger: logging.Logger,
+                          mp4_file: str,
+                          fn: int,
+                          camera_name: str,
+                          output_dir: str,
+                          video_writer: cv2.VideoWriter = None,
+                          frame_width: int = None,
+                          frame_height: int = None,
+                          interval_minutes: int = 2,
+                          batch_size: int = 500) -> Tuple[int, cv2.VideoWriter, int, int, List]:
+    """
+    Fallback function to extract frames directly from video without text file data.
+    Uses fixed intervals based on video frame rate and duration.
+    
+    Args:
+        logger: Logger object
+        mp4_file: Path to the MP4 file
+        fn: Current frame number counter
+        camera_name: Name of the camera
+        output_dir: Directory to save output
+        video_writer: Optional video writer object
+        frame_width: Optional frame width
+        frame_height: Optional frame height
+        interval_minutes: Interval between frames in minutes (default: 2)
+        batch_size: Number of frames to process in one batch
+        
+    Returns:
+        Tuple of (updated frame counter, video writer, width, height, frame data list)
+    """
+    logger.info(f"Using fallback frame extraction for {mp4_file}")
+    
+    # Enable OpenCV optimizations
+    cv2.setUseOptimized(True)
+    cv2.setNumThreads(cpu_count())  # Use all CPU cores
+    
+    # Open the video file
+    video_capture = cv2.VideoCapture(mp4_file)
+    if not video_capture.isOpened():
+        logger.error(f"Could not open video: {mp4_file}")
+        return fn, video_writer, frame_width, frame_height, []
+    
+    # Get video properties
+    if frame_width is None or frame_height is None:
+        frame_width = int(video_capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+        frame_height = int(video_capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    
+    # Initialize video writer if needed
+    if video_writer is None:
+        output_video_path = Path(output_dir) / f'{camera_name}_output_video.mp4'
+        # Try to use hardware acceleration if available
+        try:
+            # On many Linux systems, H264 hardware acceleration is available
+            fourcc = cv2.VideoWriter_fourcc(*'avc1')
+            video_writer = cv2.VideoWriter(str(output_video_path), fourcc, 30, (frame_width, frame_height))
+            if not video_writer.isOpened():
+                raise RuntimeError("Hardware acceleration not available")
+        except Exception as e:
+            logger.warning(f"Failed to use hardware acceleration: {e}, falling back to software encoding")
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            video_writer = cv2.VideoWriter(str(output_video_path), fourcc, 30, (frame_width, frame_height))
+            if not video_writer.isOpened():
+                logger.error("Failed to initialize video writer. Trying MJPG.")
+                fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+                video_writer = cv2.VideoWriter(str(output_video_path.with_suffix('.avi')), fourcc, 30, (frame_width, frame_height))
+    
+    # Get video metadata
+    fps = video_capture.get(cv2.CAP_PROP_FPS)
+    total_frames = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
+    
+    if fps <= 0 or total_frames <= 0:
+        logger.error(f"Invalid video properties: FPS={fps}, Total frames={total_frames}")
+        return fn, video_writer, frame_width, frame_height, []
+    
+    # Calculate frames to extract (every interval_minutes minutes)
+    frames_per_interval = int(fps * 60 * interval_minutes)
+    
+    # Pre-calculate all frame positions to extract
+    frame_positions = list(range(0, total_frames, frames_per_interval))
+    if not frame_positions:
+        logger.warning(f"No frames to extract from {mp4_file}")
+        return fn, video_writer, frame_width, frame_height, []
+    
+    # List to store extracted frame data
+    frame_data_list = []
+    start_time = datetime.now()
+    frames_processed = 0
+    
+    try:
+        # Process frames in batches to optimize performance
+        for batch_start in range(0, len(frame_positions), batch_size):
+            batch_end = min(batch_start + batch_size, len(frame_positions))
+            batch_positions = frame_positions[batch_start:batch_end]
+            
+            # Extract all frames in this batch
+            for frame_pos in batch_positions:
+                # Set position to the frame number
+                video_capture.set(cv2.CAP_PROP_POS_FRAMES, frame_pos)
+                ret, frame = video_capture.read()
+                
+                if not ret:
+                    logger.warning(f"Could not read frame {frame_pos} from {mp4_file}")
+                    continue
+                
+                # Write frame to video (processed in memory to avoid extra disk I/O)
+                video_writer.write(frame)
+                
+                # Use "missing" as timestamp as per requirements
+                frame_date = "missing"
+                
+                # Add to frame data list
+                frame_data_list.append({'frame_number': fn, 'frame_date': frame_date})
+                fn += 1
+                frames_processed += 1
+            
+            # Report progress for each batch
+            if batch_positions:
+                progress_pct = min(100, int(batch_end * 100 / len(frame_positions)))
+                logger.info(f"Fallback extraction progress: {progress_pct}% ({frames_processed} frames processed)")
+    
+    except Exception as e:
+        logger.error(f"Error in fallback frame extraction: {e}")
+    
+    finally:
+        video_capture.release()
+        
+        # Calculate and log performance
+        elapsed = (datetime.now() - start_time).total_seconds()
+        if elapsed > 0 and frames_processed > 0:
+            logger.info(f"Fallback performance: {frames_processed} frames in {elapsed:.2f}s ({frames_processed/elapsed:.2f} fps)")
+    
+    return fn, video_writer, frame_width, frame_height, frame_data_list
