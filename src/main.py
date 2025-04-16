@@ -77,7 +77,13 @@ def main(cfg: DictConfig) -> None:
         if not dst_dir.exists():
             dst_dir.mkdir(parents=True)
         
+        # First, rename mp4 files to remove _0.mp4 suffix
         nvr.rename_mp4_files(logger, src_dir)
+        
+        # Next, concatenate any split video files
+        #nvr.concat_videos(src_dir, logger)
+        
+        # Then find file pairs for processing
         file_pairs = nvr.find_file_pairs(src_dir)
         
         if not file_pairs:
@@ -91,14 +97,15 @@ def main(cfg: DictConfig) -> None:
         
         for mp4_file, txt_infofile in file_pairs:
             # Check if both files exist
-            if not (Path(mp4_file).exists() and Path(txt_infofile).exists()):
-                logger.error(f"Missing file: {mp4_file} or {txt_infofile}")
-                continue
+            # if not (Path(mp4_file).exists() and Path(txt_infofile).exists()):
+            #     logger.error(f"Missing file: {mp4_file} or {txt_infofile}")
+            #     continue
                 
             logger.info(f"::: Processing file {mp4_file}... and {txt_infofile} ... :::")
             
             try:
                 frame_numbers, frame_dates = nvr.process_frame_data(txt_infofile)
+                
                 fn, video_writer, frame_width, frame_height, frame_data = nvr.extract_frames_to_video_and_csv(
                     logger=logger, 
                     mp4_file=mp4_file,
@@ -115,6 +122,29 @@ def main(cfg: DictConfig) -> None:
                 all_frame_data.extend(frame_data)  # Add this batch of frame data to our collection
             except Exception as e:
                 logger.error(f"Error processing file {mp4_file}: {e}")
+                
+                # Fallback mechanism for MP4 files without valid TXT data or with indexing errors
+                logger.info(f"Attempting fallback frame extraction for {mp4_file}")
+                try:
+                    fn, video_writer, frame_width, frame_height, fallback_frame_data = nvr.extract_frames_fallback(
+                        logger=logger,
+                        mp4_file=mp4_file,
+                        fn=fn,
+                        camera_name=camera_name,
+                        output_dir=dst_dir,
+                        video_writer=video_writer,
+                        frame_width=frame_width,
+                        frame_height=frame_height
+                    )
+                    
+                    if fallback_frame_data:
+                        logger.info(f"Fallback extraction successful for {mp4_file}, retrieved {len(fallback_frame_data)} frames")
+                        all_frame_data.extend(fallback_frame_data)
+                    else:
+                        logger.error(f"Fallback extraction returned no frames for {mp4_file}")
+                except Exception as fallback_error:
+                    logger.error(f"Fallback extraction also failed for {mp4_file}: {fallback_error}")
+                
                 continue
             
         if video_writer:
