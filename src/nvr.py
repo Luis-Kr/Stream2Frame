@@ -532,8 +532,7 @@ def extract_frames_fallback(logger: logging.Logger,
                           video_writer: cv2.VideoWriter = None,
                           frame_width: int = None,
                           frame_height: int = None,
-                          interval_minutes: int = 2,
-                          batch_size: int = 500) -> Tuple[int, cv2.VideoWriter, int, int, List]:
+                          interval_minutes: int = 2) -> Tuple[int, cv2.VideoWriter, int, int, List]:
     """
     Fallback function to extract frames directly from video without text file data.
     Uses fixed intervals based on video frame rate and duration.
@@ -548,7 +547,6 @@ def extract_frames_fallback(logger: logging.Logger,
         frame_width: Optional frame width
         frame_height: Optional frame height
         interval_minutes: Interval between frames in minutes (default: 2)
-        batch_size: Number of frames to process in one batch
         
     Returns:
         Tuple of (updated frame counter, video writer, width, height, frame data list)
@@ -557,7 +555,6 @@ def extract_frames_fallback(logger: logging.Logger,
     
     # Enable OpenCV optimizations
     cv2.setUseOptimized(True)
-    cv2.setNumThreads(cpu_count())  # Use all CPU cores
     
     # Open the video file
     video_capture = cv2.VideoCapture(mp4_file)
@@ -573,21 +570,12 @@ def extract_frames_fallback(logger: logging.Logger,
     # Initialize video writer if needed
     if video_writer is None:
         output_video_path = Path(output_dir) / f'{camera_name}_output_video.mp4'
-        # Try to use hardware acceleration if available
-        try:
-            # On many Linux systems, H264 hardware acceleration is available
-            fourcc = cv2.VideoWriter_fourcc(*'avc1')
-            video_writer = cv2.VideoWriter(str(output_video_path), fourcc, 30, (frame_width, frame_height))
-            if not video_writer.isOpened():
-                raise RuntimeError("Hardware acceleration not available")
-        except Exception as e:
-            logger.warning(f"Failed to use hardware acceleration: {e}, falling back to software encoding")
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            video_writer = cv2.VideoWriter(str(output_video_path), fourcc, 30, (frame_width, frame_height))
-            if not video_writer.isOpened():
-                logger.error("Failed to initialize video writer. Trying MJPG.")
-                fourcc = cv2.VideoWriter_fourcc(*'MJPG')
-                video_writer = cv2.VideoWriter(str(output_video_path.with_suffix('.avi')), fourcc, 30, (frame_width, frame_height))
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        video_writer = cv2.VideoWriter(str(output_video_path), fourcc, 30, (frame_width, frame_height))
+        if not video_writer.isOpened():
+            logger.error("Failed to initialize video writer. Trying MJPG.")
+            fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+            video_writer = cv2.VideoWriter(str(output_video_path.with_suffix('.avi')), fourcc, 30, (frame_width, frame_height))
     
     # Get video metadata
     fps = video_capture.get(cv2.CAP_PROP_FPS)
@@ -600,48 +588,37 @@ def extract_frames_fallback(logger: logging.Logger,
     # Calculate frames to extract (every interval_minutes minutes)
     frames_per_interval = int(fps * 60 * interval_minutes)
     
-    # Pre-calculate all frame positions to extract
-    frame_positions = list(range(0, total_frames, frames_per_interval))
-    if not frame_positions:
-        logger.warning(f"No frames to extract from {mp4_file}")
-        return fn, video_writer, frame_width, frame_height, []
-    
     # List to store extracted frame data
     frame_data_list = []
     start_time = datetime.now()
     frames_processed = 0
     
     try:
-        # Process frames in batches to optimize performance
-        for batch_start in range(0, len(frame_positions), batch_size):
-            batch_end = min(batch_start + batch_size, len(frame_positions))
-            batch_positions = frame_positions[batch_start:batch_end]
+        # Extract frames at regular intervals
+        for i in range(0, total_frames, frames_per_interval):
+            # Set position to the frame number
+            video_capture.set(cv2.CAP_PROP_POS_FRAMES, i)
+            ret, frame = video_capture.read()
             
-            # Extract all frames in this batch
-            for frame_pos in batch_positions:
-                # Set position to the frame number
-                video_capture.set(cv2.CAP_PROP_POS_FRAMES, frame_pos)
-                ret, frame = video_capture.read()
-                
-                if not ret:
-                    logger.warning(f"Could not read frame {frame_pos} from {mp4_file}")
-                    continue
-                
-                # Write frame to video (processed in memory to avoid extra disk I/O)
-                video_writer.write(frame)
-                
-                # Use "missing" as timestamp as per requirements
-                frame_date = "missing"
-                
-                # Add to frame data list
-                frame_data_list.append({'frame_number': fn, 'frame_date': frame_date})
-                fn += 1
-                frames_processed += 1
+            if not ret:
+                logger.warning(f"Could not read frame {i} from {mp4_file}")
+                continue
             
-            # Report progress for each batch
-            if batch_positions:
-                progress_pct = min(100, int(batch_end * 100 / len(frame_positions)))
-                logger.info(f"Fallback extraction progress: {progress_pct}% ({frames_processed} frames processed)")
+            # Write frame to video
+            video_writer.write(frame)
+            
+            # Calculate approximate timestamp (use "missing" as per requirements)
+            # This is a placeholder. We use "missing" to indicate timestamps need to be extracted later
+            frame_date = "missing"
+            
+            # Add to frame data list
+            frame_data_list.append({'frame_number': fn, 'frame_date': frame_date})
+            fn += 1
+            frames_processed += 1
+            
+            # Report progress less frequently to improve performance
+            if frames_processed % 100 == 0:
+                logger.debug(f"Fallback extraction progress: {frames_processed} frames processed")
     
     except Exception as e:
         logger.error(f"Error in fallback frame extraction: {e}")
