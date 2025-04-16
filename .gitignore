@@ -28,3 +28,6 @@ data/*
 !data/.gitkeep
 outputs/
 status/processing_history.csv
+*.lock
+current_status.txt
+status/*
