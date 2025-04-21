@@ -360,7 +360,6 @@ def extract_frames_to_video_and_csv(logger: logging.Logger,
                                   batch_size: int = 500,
                                   write_csv: bool = True) -> Tuple[int, cv2.VideoWriter, int, int, List]:
     """High-performance version optimized for speed"""
-    
     # Enable OpenCV optimizations
     cv2.setUseOptimized(True)
     
@@ -380,11 +379,11 @@ def extract_frames_to_video_and_csv(logger: logging.Logger,
     if video_writer is None:
         output_video_path = Path(output_dir) / f'{camera_name}_output_video.mp4'
         # Use mp4v codec which is faster on most systems
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        fourcc = cv2.VideoWriter_fourcc(*'avc1') #mp4v, avc1
         video_writer = cv2.VideoWriter(str(output_video_path), fourcc, 30, (frame_width, frame_height))
         if not video_writer.isOpened():
             logger.error("Failed to initialize video writer. Trying MJPG.")
-            fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
             video_writer = cv2.VideoWriter(str(output_video_path.with_suffix('.avi')), fourcc, 30, (frame_width, frame_height))
 
     # Prepare CSV file if needed
@@ -570,11 +569,11 @@ def extract_frames_fallback(logger: logging.Logger,
     # Initialize video writer if needed
     if video_writer is None:
         output_video_path = Path(output_dir) / f'{camera_name}_output_video.mp4'
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        fourcc = cv2.VideoWriter_fourcc(*'avc1') #mp4v
         video_writer = cv2.VideoWriter(str(output_video_path), fourcc, 30, (frame_width, frame_height))
         if not video_writer.isOpened():
             logger.error("Failed to initialize video writer. Trying MJPG.")
-            fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
             video_writer = cv2.VideoWriter(str(output_video_path.with_suffix('.avi')), fourcc, 30, (frame_width, frame_height))
     
     # Get video metadata
