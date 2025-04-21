@@ -31,3 +31,5 @@ status/processing_history.csv
 *.lock
 current_status.txt
 status/*
+*.avi
+*.ipynb
