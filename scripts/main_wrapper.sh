@@ -249,7 +249,7 @@ process_date() {
     echo "VM wrapper started at $(date)" > "${log_file}"
     
     # Activate the Conda environment
-    source /root/miniforge/etc/profile.d/conda.sh
+    source /volume1/miniconda/bin/activate
     source ~/.bashrc
     conda activate dt_ecosense 2>> "${log_file}" || {
         log "ERROR" "Failed to activate conda environment"
