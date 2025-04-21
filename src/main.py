@@ -15,6 +15,7 @@ import glob
 import hydra
 from hydra import compose, initialize
 from omegaconf import DictConfig
+from hydra.core.hydra_config import HydraConfig
 
 sys.path.append(str(Path(__file__).parent.parent.absolute()))
 
@@ -31,6 +32,12 @@ root_dir = Path(__file__).parent.parent.absolute()
 
 @hydra.main(version_base=None, config_path="../config", config_name="main")
 def main(cfg: DictConfig) -> None:
+    # # Force Hydra to use our directory for outputs
+    # if HydraConfig.initialized():
+    #     hydra_cfg = HydraConfig.get()
+    #     output_dir = os.path.join(root_dir, "outputs")
+    #     hydra_cfg.runtime.output_dir = output_dir
+    
     # Clear the hydra config cache
     utils.clear_hydra_cache()
     
