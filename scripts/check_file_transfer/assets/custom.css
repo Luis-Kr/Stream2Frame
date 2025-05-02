@@ -1,0 +1,195 @@
+
+body {
+    font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    background-color: #F8FAFC;
+    color: #334155;
+}
+.header {
+    background-color: #6366F1;
+    color: white;
+    padding: 1.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+.content {
+    padding: 1.5rem;
+    max-width: 1500px;
+    margin: 0 auto;
+}
+.card {
+    background-color: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    padding: 1.5rem;
+    margin-bottom: 2.5rem;
+}
+.row {
+    display: flex;
+    flex-wrap: wrap;
+    margin: 0 -0.75rem;
+    margin-bottom: 1.5rem;
+}
+.row_metrics {
+    display: flex;
+    flex-wrap: wrap;
+    margin: 0 -0.75rem;
+}
+.col {
+    flex: 1;
+    padding: 0 0.75rem;
+    min-width: 300px;
+}
+.date-selector {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+.date-selector label {
+    margin-right: 15px;
+    font-weight: 600;
+    color: #334155;
+}
+.date-selector .date-dropdown {
+    flex-grow: 1;
+    min-width: 250px;
+    max-width: 400px;
+}
+.date-selector .date-picker {
+    margin-right: 10px;
+    margin-bottom: 10px;
+}
+.date-nav-buttons {
+    display: flex;
+    margin-left: 15px;
+}
+.date-nav-button {
+    background-color: #6366F1;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    margin: 0 5px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+}
+.date-nav-button:hover {
+    background-color: #6366F1cc;
+}
+.date-nav-button:disabled {
+    background-color: #94A3B8;
+    cursor: not-allowed;
+}
+.metric-card {
+    background-color: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    text-align: center;
+    border-left: 5px solid #6366F1;
+}
+.metric-value {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #6366F1;
+    margin-bottom: 0.5rem;
+}
+.metric-label {
+    font-size: 1.1rem;
+    color: #94A3B8;
+    font-weight: 500;
+}
+.alert {
+    background-color: #F43F5E;
+    color: white;
+    padding: 0.75rem 1.25rem;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+    font-weight: 500;
+}
+h2 {
+    color: #6366F1;
+    margin-top: 0;
+    font-weight: 600;
+}
+.footer {
+    text-align: center;
+    padding: 1.5rem;
+    color: #94A3B8;
+    font-size: 0.9rem;
+}
+.tabs-content {
+    padding: 1.5rem 0;
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+th, td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid #e2e8f0;
+}
+th {
+    background-color: #f8fafc;
+    font-weight: 600;
+}
+/* Custom styling for dropdowns */
+.dash-dropdown .Select-control {
+    border: 1px solid #e2e8f0;
+    border-radius: 0.375rem;
+    height: 40px;
+}
+.dash-dropdown .Select-placeholder,
+.dash-dropdown .Select-input, 
+.dash-dropdown .Select-value {
+    padding-top: 5px;
+}
+/* Make date dropdowns wider */
+.date-dropdown .Select-control {
+    width: 100%;
+    min-width: 250px;
+}
+/* Custom styling for sliders */
+.rc-slider-track {
+    background-color: #6366F1;
+}
+.rc-slider-handle {
+    border-color: #6366F1;
+}
+.rc-slider-handle:hover,
+.rc-slider-handle:active {
+    border-color: #6366F1cc;
+    box-shadow: 0 0 0 5px #6366F133;
+}
+/* Calendar date picker styling */
+.SingleDatePickerInput {
+    border: 1px solid #e2e8f0;
+    border-radius: 0.375rem;
+}
+.DateInput {
+    width: 130px;
+}
+.DateInput_input {
+    font-size: 16px;
+    line-height: 24px;
+    color: #334155;
+    padding: 7px 12px;
+    border-bottom: none;
+}
+.CalendarDay__selected {
+    background: #6366F1;
+    border: 1px solid #6366F1;
+}
+.CalendarDay__selected:hover {
+    background: #6366F1cc;
+}
+.CalendarDay__hovered_span, 
+.CalendarDay__selected_span {
+    background: #6366F144;
+    color: #334155;
+}
+.DayPickerKeyboardShortcuts_show__bottomRight::before {
+    border-right-color: #6366F1;
+}
